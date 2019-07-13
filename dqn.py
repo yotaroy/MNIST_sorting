@@ -20,9 +20,9 @@ import env
 class DQN_DIGIT(nn.Module):
     def __init__(self, size):
         super(DQN_DIGIT, self).__init__()
-        self.f1 = nn.Linear(size, 100)
-        self.f2 = nn.Linear(100, 100)
-        self.f3 = nn.Linear(100, size-1)
+        self.f1 = nn.Linear(size, 30)
+        self.f2 = nn.Linear(30, 30)
+        self.f3 = nn.Linear(30, size-1)
         
     def forward(self, x):
         x = F.relu(self.f1(x))
@@ -120,13 +120,13 @@ class Learning:
 
     def select_action(self, state, episode):
         sample = random.random()
-        '''
+
         EPS_START = 0.9
         EPS_END = 0.05
-        EPS_DECAY = 10000
+        EPS_DECAY = 10000 if self.learning_mode=='digit' else 10 ** 6
         eps_threshold = EPS_END + (EPS_START - EPS_END) * np.exp(-1. * episode / EPS_DECAY)
-        '''
-        eps_threshold = 0.9
+
+        # eps_threshold = 0.05
 
         if sample > eps_threshold:
             with torch.no_grad():
@@ -137,7 +137,7 @@ class Learning:
 
     def optimize_model(self):
         if len(self.memory) < self.batch_size:
-            return
+            return 0
         
         transitions = self.memory.sample(self.batch_size)
         batch = self.memory.transition(*zip(*transitions))
@@ -153,7 +153,7 @@ class Learning:
             
 
         non_final_mask = torch.tensor(tuple(map(lambda s:s is not None, 
-            batch.next_state)), device=self.device, dtype=torch.long)
+            batch.next_state)), device=self.device, dtype=torch.uint8)
         non_final_next_states = torch.cat([s for s in batch.next_state if s is not None])
         state_batch = torch.cat(batch.state)
         action_batch = torch.cat(batch.action)
@@ -162,9 +162,19 @@ class Learning:
         state_action_values = self.policy_net(state_batch).gather(1, action_batch)
 
         next_state_values = torch.zeros(self.batch_size, device=self.device)
-        next_state_values[non_final_mask] = self.target_net(non_final_next_states).max().detach()
+        next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1)[0].detach()
 
         expected_state_action_values = (next_state_values * self.gamma) + reward_batch.float()
+
+        '''
+        print(state_batch)
+        print(action_batch)
+        print(reward_batch)
+        print(state_action_values)
+        print(next_state_values)
+        print(expected_state_action_values)
+        exit()
+        '''
 
         loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1)) 
 
@@ -172,12 +182,15 @@ class Learning:
         loss.backward()
         self.optimizer.step()
 
+        return loss.item()
+
 
     def training(self, EPOCH=1):
         self.make_dir()
         start_time = time.time()
 
         steps = []
+        losses = []
 
         # 移動平均
         step_hisory = []
@@ -188,7 +201,19 @@ class Learning:
         for epo in range(EPOCH):
             for episode, (digits, labels) in enumerate(self.train_loader):
                 step = 0
+                loss = 0
                 digits = digits.to(self.device)
+
+                '''
+                # 同じデータで
+                if epo == episode == 0:
+                    data = digits
+                    l = labels
+                else:
+                    digits = data
+                    labels = l
+                '''
+
                 error = self.env.new_setting(digits, labels)
                 if error:   # 入力数字がゾロ目の場合
                     print('all the same number')
@@ -211,12 +236,13 @@ class Learning:
                     self.memory.push(state, action, next_state, reward)
                     state = next_state
 
-                    self.optimize_model()
+                    loss += self.optimize_model()
 
                     # if step == 20:  # 行動系列が長くなりすぎる
                         # done = True
 
                 steps.append(step)
+                losses.append(loss/step if step!=0 else 0)
                 step_hisory.append(step)
                 if len(step_hisory) >= step_average_num:
                     step_average.append(sum(step_hisory)/step_average_num)
@@ -228,11 +254,12 @@ class Learning:
                     self.target_net.load_state_dict(self.policy_net.state_dict())
                 
                 if total_episode % 100 == 0:
-                    self.plot_step(steps, step_average, self.dirpath+'plot.png')
+                    self.plot_step(steps, step_average, self.dirpath+'step.png')
+                    self.plot_loss(losses, self.dirpath+'loss.png')
 
                 if total_episode % 10000 == 0:
                     print('episode: ', total_episode)
-                    self.save_model(total_episode, self.dirpath+'model{}.pth'.format(total_episode))
+                    self.save_model(total_episode, steps, step_average, losses, self.dirpath+'model{}.pth'.format(total_episode))
                 
                 print('episode:{}, steps:{}'.format(total_episode, step))
 
@@ -248,6 +275,18 @@ class Learning:
         plt.legend()
         plt.savefig(path)
         plt.close()
+
+    def plot_loss(self, losses, path):
+        x = range(1, len(losses)+1)
+        plt.plot(x, losses, label='loss', color='cornflowerblue')
+        plt.yscale('log')
+        plt.title(self.learning_mode.upper())
+        plt.xlabel('episode')
+        plt.ylabel('loss')
+        plt.legend()
+        plt.savefig(path)
+        plt.close()
+
 
     '''
     def plot_step(self, step_average, success_average, path):
@@ -267,7 +306,7 @@ class Learning:
         plt.close()
     '''
     
-    def save_model(self, episode, path):
+    def save_model(self, episode, steps, step_average, losses, path):
         checkpoint = {
             'episode': episode,
             'digit_num': self.digit_num,
@@ -280,7 +319,10 @@ class Learning:
             'target_update': self.target_update,
             'replay_memory_size': self.replay_memory_size,
             'success_reward': self.success_reward,
-            'action_cost': self.action_cost
+            'action_cost': self.action_cost,
+            'steps': steps,
+            'step_average': step_average,
+            'losses': losses
         }
         torch.save(checkpoint, path)
 

@@ -40,3 +40,13 @@ learning.training(EPOCH=1)
 $ python main.py
 ```
 
+
+## いい感じの結果
+- result81(85)
+    - digit
+    - EPS_START = 0.9
+    - EPS_END = 0.05
+    - EPS_DECAY = 10000
+    - eps_threshold = EPS_END + (EPS_START - EPS_END) * np.exp(-1. * episode / EPS_DECAY)
+        '
+
