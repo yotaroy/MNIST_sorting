@@ -50,3 +50,11 @@ $ python main.py
     - eps_threshold = EPS_END + (EPS_START - EPS_END) * np.exp(-1. * episode / EPS_DECAY)
         '
 
+- result91
+    - digit
+    - EPS_START = 0.9
+    - EPS_END = 0.05
+    - EPS_DECAY = 10 ** 6   (大きすぎる気がする)
+    - eps_threshold = EPS_END + (EPS_START - EPS_END) * np.exp(-1. * episode / EPS_DECAY)
+       
+

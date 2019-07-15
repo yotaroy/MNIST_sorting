@@ -34,22 +34,42 @@ class DQN_DIGIT(nn.Module):
 class DQN_MNIST(nn.Module):
     def __init__(self, size):
         super(DQN_MNIST, self).__init__()
-        self.conv1 = nn.Conv2d(size, 20, 5, 1)
-        self.conv2 = nn.Conv2d(20, 50, 5, 1)
-        self.fc1 = nn.Linear(4*4*50, 500)
-        self.fc2 = nn.Linear(500, 500)
-        self.fc3 = nn.Linear(500, size-1)
+        self.size = size
+
+        self.block1 = nn.Sequential(
+            nn.Conv2d(1,20,5,1),
+            nn.ReLU(),
+            nn.MaxPool2d(2,2),
+            nn.Conv2d(20,50,5,1),
+            nn.ReLU(),
+            nn.MaxPool2d(2,2)
+        )
+        self.block2 = nn.Sequential(
+            nn.Linear(4*4*50, 500), 
+            nn.ReLU(),
+            nn.Linear(500, 10),
+            nn.ReLU()
+        )
+
+        self.fc1 = nn.Linear(10*self.size, 10*self.size)
+        self.fc2 = nn.Linear(10*self.size, self.size-1)
+
 
     def forward(self, x):
-        x = F.relu(self.conv1(x))
-        x = F.max_pool2d(x, 2, 2)
-        x = F.relu(self.conv2(x))
-        x = F.max_pool2d(x, 2, 2)
-        x = x.view(-1, 4*4*50)
+        x0, x1, x2, x3 = torch.chunk(x, 4, dim=1)   # size = 4
+        x0 = self.block1(x0)
+        x0 = self.block2(x0.view(-1, 4*4*50))
+        x1 = self.block1(x1)
+        x1 = self.block2(x1.view(-1, 4*4*50))
+        x2 = self.block1(x2)
+        x2 = self.block2(x2.view(-1, 4*4*50))
+        x3 = self.block1(x3)
+        x3 = self.block2(x3.view(-1, 4*4*50))
+
+        x = torch.cat([x0,x1,x2,x3], dim=1)
         x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
         return x
 
 class ReplayMemory(object):
@@ -123,7 +143,7 @@ class Learning:
 
         EPS_START = 0.9
         EPS_END = 0.05
-        EPS_DECAY = 10000 if self.learning_mode=='digit' else 10 ** 6
+        EPS_DECAY = 10000 if self.learning_mode=='digit' else 10 ** 5
         eps_threshold = EPS_END + (EPS_START - EPS_END) * np.exp(-1. * episode / EPS_DECAY)
 
         # eps_threshold = 0.05
@@ -166,16 +186,6 @@ class Learning:
 
         expected_state_action_values = (next_state_values * self.gamma) + reward_batch.float()
 
-        '''
-        print(state_batch)
-        print(action_batch)
-        print(reward_batch)
-        print(state_action_values)
-        print(next_state_values)
-        print(expected_state_action_values)
-        exit()
-        '''
-
         loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1)) 
 
         self.optimizer.zero_grad()
@@ -198,29 +208,31 @@ class Learning:
         step_average = [np.nan] * (step_average_num-1)
 
         total_episode = 0
+        self.test_model(episode=total_episode)
         for epo in range(EPOCH):
-            for episode, (digits, labels) in enumerate(self.train_loader):
+            for digits, labels in self.train_loader:
                 step = 0
                 loss = 0
                 digits = digits.to(self.device)
 
                 '''
                 # 同じデータで
-                if epo == episode == 0:
+                if total_episode == 0:
                     data = digits
                     l = labels
                 else:
                     digits = data
                     labels = l
                 '''
+                done = False
 
                 error = self.env.new_setting(digits, labels)
                 if error:   # 入力数字がゾロ目の場合
                     print('all the same number')
-                    continue
-                state = self.env.now_state(self.learning_mode)
+                    done = True
+                else:
+                    state = self.env.now_state(self.learning_mode)
 
-                done = False
                 while not done:
                     step += 1
 
@@ -238,17 +250,23 @@ class Learning:
 
                     loss += self.optimize_model()
 
-                    # if step == 20:  # 行動系列が長くなりすぎる
-                        # done = True
+                if step != 0:
+                    steps.append(step)
+                    losses.append(loss/step if loss!=0 else np.nan)
 
-                steps.append(step)
-                losses.append(loss/step if step!=0 else 0)
-                step_hisory.append(step)
-                if len(step_hisory) >= step_average_num:
-                    step_average.append(sum(step_hisory)/step_average_num)
-                    step_hisory.pop(0)
-                
-                total_episode = epo * len(self.train_loader) + episode + 1
+                    step_hisory.append(step)
+                    if len(step_hisory) >= step_average_num:
+                        step_average.append(sum(step_hisory)/step_average_num)
+                        step_hisory.pop(0)
+                else:
+                    steps.append(np.nan)
+                    losses.append(np.nan)
+
+                    if total_episode >= step_average_num:
+                        step_average.append(np.nan)
+                    
+                total_episode += 1
+
                 # target_network update
                 if total_episode % self.target_update == 0:
                     self.target_net.load_state_dict(self.policy_net.state_dict())
@@ -256,9 +274,11 @@ class Learning:
                 if total_episode % 100 == 0:
                     self.plot_step(steps, step_average, self.dirpath+'step.png')
                     self.plot_loss(losses, self.dirpath+'loss.png')
+                
+                if total_episode % 1000 == 0:
+                    self.test_model(episode=total_episode)
 
                 if total_episode % 10000 == 0:
-                    print('episode: ', total_episode)
                     self.save_model(total_episode, steps, step_average, losses, self.dirpath+'model{}.pth'.format(total_episode))
                 
                 print('episode:{}, steps:{}'.format(total_episode, step))
@@ -287,25 +307,6 @@ class Learning:
         plt.savefig(path)
         plt.close()
 
-
-    '''
-    def plot_step(self, step_average, success_average, path):
-        _, ax1 = plt.subplots()
-        x = range(1, len(success_average)+1)
-        # ax1.plot(x, steps, color='cornflowerblue')
-        ax1.plot(step_average[0], step_average[1], label='step', color='blue')
-        ax2 = ax1.twinx()
-        ax2.plot(x, success_average, label='success rate', color='r')
-        ax1.set_title(self.learning_mode.upper())
-        ax1.set_xlabel('episode')
-        ax1.set_ylabel('step')
-        ax2.set_ylabel('success rate')
-        ax1.legend(loc='upper left')
-        ax2.legend(loc='upper center')
-        plt.savefig(path)
-        plt.close()
-    '''
-    
     def save_model(self, episode, steps, step_average, losses, path):
         checkpoint = {
             'episode': episode,
@@ -340,3 +341,70 @@ class Learning:
             f.write('replay_memory_size: {}\nsuccess_reward: {}\naction_cost: {}\n'
                 .format(self.replay_memory_size, self.success_reward, 
                 self.action_cost))
+    
+
+    def test_model(self, path=None, episode=None):
+        if path is None:
+            test_network = self.target_net
+        else:
+            model = torch.load(path)
+            digit = model['digit_num']
+            model_dict = {'digit':DQN_DIGIT(digit), 'mnist':DQN_MNIST(digit)}
+            test_network = model_dict[model['learning_mode']].to(self.device)
+            test_network.load_state_dict(model['model_state'])
+
+        same = 0
+        loop = 0
+        ok = 0
+        step_average = 0
+
+        for num, (digits, labels) in enumerate(self.test_loader):
+            step = 0
+            # loss = 0
+            digits = digits.to(self.device)
+
+            done = False
+
+            error = self.env.new_setting(digits, labels)
+            if error:   # 入力数字がゾロ目の場合
+                # print('#{}  all the same number'.format(num))
+                same += 1
+                continue
+
+            while not done:
+                step += 1
+                state = self.env.now_state(self.learning_mode)
+                with torch.no_grad():
+                    action = test_network(state).argmax().view(1, 1)
+ 
+                reward, done = self.env.take_action(action.item())
+                reward = torch.tensor([reward], device=self.device)
+
+                # loss += self.optimize_model()
+
+                if step >= 100:
+                    done = True
+                    # print('#{}  loop actions'.format(num))
+                    loop += 1 
+
+            if 0 < step < 100:
+                step_average += step
+                ok += 1
+                # print('#{}  step:{}'.format(num, step))
+
+        step_average /= ok
+
+        print('step average:', step_average)
+        print('sort success:', ok)
+        print('loop error:', loop)
+        print('same number error:', same)
+
+        if path is None:
+            with open(self.dirpath+'test.txt', 'a') as f:
+                if not episode is None:
+                    f.write('#{}\n'.format(episode))
+                f.write('step average:{}\n'.format(step_average))
+                f.write('sort success:{}\n'.format(ok))
+                f.write('loop error:{}\n'.format(loop))
+                f.write('same number error:{}\n'.format(same))
+
