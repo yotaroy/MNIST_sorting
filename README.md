@@ -1,7 +1,7 @@
 # MNIST sorting
 
 ## task
-nつの数字の画像が入力され，隣同士の数字を入れ替える行動をして，昇順にソートをして，ソートを終了させる．  
+nつの数字の画像が入力され，隣同士の数字を入れ替える行動をして，昇順にソートを
 MNISTの数字nつが入力のstateとなり，出力をn-1つのactionとする．
 ```
 s_t = (d_0, d_1, ..., d_n)
@@ -39,22 +39,4 @@ learning.training(EPOCH=1)
 ```
 $ python main.py
 ```
-
-
-## いい感じの結果
-- result81(85)
-    - digit
-    - EPS_START = 0.9
-    - EPS_END = 0.05
-    - EPS_DECAY = 10000
-    - eps_threshold = EPS_END + (EPS_START - EPS_END) * np.exp(-1. * episode / EPS_DECAY)
-        '
-
-- result91
-    - digit
-    - EPS_START = 0.9
-    - EPS_END = 0.05
-    - EPS_DECAY = 10 ** 6   (大きすぎる気がする)
-    - eps_threshold = EPS_END + (EPS_START - EPS_END) * np.exp(-1. * episode / EPS_DECAY)
-       
 

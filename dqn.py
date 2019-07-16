@@ -17,6 +17,7 @@ import sys
 
 import env
 
+
 class DQN_DIGIT(nn.Module):
     def __init__(self, size):
         super(DQN_DIGIT, self).__init__()
@@ -30,6 +31,7 @@ class DQN_DIGIT(nn.Module):
         x = F.relu(self.f2(x))
         x = F.relu(self.f3(x))
         return x
+
 
 class DQN_MNIST(nn.Module):
     def __init__(self, size):
@@ -50,27 +52,20 @@ class DQN_MNIST(nn.Module):
             nn.Linear(500, 10),
             nn.ReLU()
         )
-
         self.fc1 = nn.Linear(10*self.size, 10*self.size)
         self.fc2 = nn.Linear(10*self.size, self.size-1)
 
-
     def forward(self, x):
-        x0, x1, x2, x3 = torch.chunk(x, 4, dim=1)   # size = 4
-        x0 = self.block1(x0)
-        x0 = self.block2(x0.view(-1, 4*4*50))
-        x1 = self.block1(x1)
-        x1 = self.block2(x1.view(-1, 4*4*50))
-        x2 = self.block1(x2)
-        x2 = self.block2(x2.view(-1, 4*4*50))
-        x3 = self.block1(x3)
-        x3 = self.block2(x3.view(-1, 4*4*50))
+        x = torch.chunk(x, self.size, dim=1)
+        x = [self.block1(i) for i in x]
+        x = [self.block2(i.view(-1, 4*4*50)) for i in x]
+        x = torch.cat(x, dim=1)
 
-        x = torch.cat([x0,x1,x2,x3], dim=1)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return x
+
 
 class ReplayMemory(object):
     def __init__(self, capacity):
@@ -92,19 +87,21 @@ class ReplayMemory(object):
     def __len__(self):
         return len(self.memory)
 
+
 class Learning:
     def __init__(self, device, model, learning_mode='mnist', seed=0, 
-        digit_num=4, batch_size=128, gamma=0.9, target_update=10, 
-        replay_memory_size=10**4, success_reward=1.0, action_cost=0):
+        digit_num=4, batch_size=128, gamma=0.7, target_update=5, 
+        replay_memory_size=10**5, success_reward=1.0, action_cost=0.0):
         self.device = device
-        self.digit_num = digit_num
+        self.digit_num = digit_num          # 数字の数
         self.batch_size = batch_size
-        self.gamma = gamma
-        self.target_update = target_update
+        self.gamma = gamma                  # 割引率
+        self.target_update = target_update  # target_networkのupdateする頻度
 
-        self.success_reward = success_reward
-        self.action_cost = action_cost
-        self.env = env.Env(success_reward=self.success_reward, action_cost=self.action_cost)
+        self.success_reward = success_reward    # ソートが完了したときの報酬
+        self.action_cost = action_cost      # 1行動ごとの即時報酬(ソートが完了する最後の行動除く)
+        self.env = env.Env(digit_num=self.digit_num, 
+            success_reward=self.success_reward, action_cost=self.action_cost)
         self.replay_memory_size = replay_memory_size
         self.memory = ReplayMemory(self.replay_memory_size)
 
@@ -115,11 +112,12 @@ class Learning:
         
         self.optimizer = optim.Adam(self.policy_net.parameters())
 
-        self.learning_mode = learning_mode
-        self.seed = seed
+        self.learning_mode = learning_mode  # digit or mnist
+        self.seed = seed    # digitデータ作成のseed
+
+        # データの作成
+        # train data: 60000, test data: 10000
         if self.learning_mode == 'mnist':
-            # train data : 60000
-            # test data : 10000
             train_data = torchvision.datasets.MNIST('.', train=True, 
                 download=True, transform=transforms.ToTensor())
             test_data = torchvision.datasets.MNIST('.', train=False, 
@@ -130,23 +128,19 @@ class Learning:
             train_data = TensorDataset(x, x)
             y = torch.from_numpy(np.random.randint(0,10, 10000)).float()
             test_data = TensorDataset(y, y)
-
-
-        self.train_loader = DataLoader(train_data, batch_size=self.digit_num)
-        self.test_loader = DataLoader(test_data, batch_size=self.digit_num)
+        self.train_loader = DataLoader(train_data, batch_size=self.digit_num, shuffle=True)
+        self.test_loader = DataLoader(test_data, batch_size=self.digit_num, shuffle=False)
     
-        self.dirpath = './'
+        self.dirpath = './'     # 保存するディレクトリ
 
-
+    # 行動選択
     def select_action(self, state, episode):
         sample = random.random()
 
         EPS_START = 0.9
         EPS_END = 0.05
-        EPS_DECAY = 10000 if self.learning_mode=='digit' else 10 ** 5
+        EPS_DECAY = 10000 if self.learning_mode=='digit' else 100000
         eps_threshold = EPS_END + (EPS_START - EPS_END) * np.exp(-1. * episode / EPS_DECAY)
-
-        # eps_threshold = 0.05
 
         if sample > eps_threshold:
             with torch.no_grad():
@@ -171,7 +165,6 @@ class Learning:
                 print('REPLAY MEMORY ERROR: SAMPLED NEXT STATES ARE ALL NONE')
                 sys.exit(1)
             
-
         non_final_mask = torch.tensor(tuple(map(lambda s:s is not None, 
             batch.next_state)), device=self.device, dtype=torch.uint8)
         non_final_next_states = torch.cat([s for s in batch.next_state if s is not None])
@@ -215,15 +208,6 @@ class Learning:
                 loss = 0
                 digits = digits.to(self.device)
 
-                '''
-                # 同じデータで
-                if total_episode == 0:
-                    data = digits
-                    l = labels
-                else:
-                    digits = data
-                    labels = l
-                '''
                 done = False
 
                 error = self.env.new_setting(digits, labels)
@@ -279,12 +263,14 @@ class Learning:
                     self.test_model(episode=total_episode)
 
                 if total_episode % 10000 == 0:
-                    self.save_model(total_episode, steps, step_average, losses, self.dirpath+'model{}.pth'.format(total_episode))
+                    self.save_model(total_episode, steps, step_average, 
+                        losses, self.dirpath+'model{}.pth'.format(total_episode))
                 
                 print('episode:{}, steps:{}'.format(total_episode, step))
 
         print('total time = {} mins'.format((time.time()-start_time)//60))
 
+    # step数のグラフを作る
     def plot_step(self, steps, step_average, path):
         x = range(1, len(steps)+1)
         plt.plot(x, steps, label='step', color='cornflowerblue')
@@ -296,6 +282,7 @@ class Learning:
         plt.savefig(path)
         plt.close()
 
+    # lossのグラフを作る
     def plot_loss(self, losses, path):
         x = range(1, len(losses)+1)
         plt.plot(x, losses, label='loss', color='cornflowerblue')
@@ -307,6 +294,7 @@ class Learning:
         plt.savefig(path)
         plt.close()
 
+    # モデルの保存
     def save_model(self, episode, steps, step_average, losses, path):
         checkpoint = {
             'episode': episode,
@@ -327,6 +315,7 @@ class Learning:
         }
         torch.save(checkpoint, path)
 
+    # 保存するdirectoryを作る，実験の条件をtxtファイルにまとめる
     def make_dir(self, dirname='result/result'):
         dirnum = 1
         while os.path.exists(dirname+str(dirnum)):
@@ -335,18 +324,18 @@ class Learning:
         os.mkdir(self.dirpath)
 
         with open(self.dirpath+'setting({}).txt'.format(self.learning_mode), 'w') as f:
-            f.write('mode: {}\nbatch size: {}\nseed: {}\ngamma: {}\ntarget_update: {}\n'
-                .format(self.learning_mode, self.batch_size, self.seed, self.gamma, 
-                self.target_update))
+            f.write('mode: {}\nnums of digit: {}\nbatch size: {}\nseed: {}\n'
+                .format(self.learning_mode, self.digit_num ,self.batch_size, self.seed))
+            f.write('gamma: {}\ntarget_update: {}\n'
+                .format(self.gamma,self.target_update))
             f.write('replay_memory_size: {}\nsuccess_reward: {}\naction_cost: {}\n'
-                .format(self.replay_memory_size, self.success_reward, 
-                self.action_cost))
-    
+                .format(self.replay_memory_size, self.success_reward, self.action_cost))
 
-    def test_model(self, path=None, episode=None):
+    # テストデータでの検証
+    def test_model(self, path=None, episode=None, print_each_result=False):
         if path is None:
             test_network = self.target_net
-        else:
+        else:   
             model = torch.load(path)
             digit = model['digit_num']
             model_dict = {'digit':DQN_DIGIT(digit), 'mnist':DQN_MNIST(digit)}
@@ -360,14 +349,14 @@ class Learning:
 
         for num, (digits, labels) in enumerate(self.test_loader):
             step = 0
-            # loss = 0
             digits = digits.to(self.device)
 
             done = False
 
             error = self.env.new_setting(digits, labels)
             if error:   # 入力数字がゾロ目の場合
-                # print('#{}  all the same number'.format(num))
+                if print_each_result:
+                    print('#{}  all the same number'.format(num))
                 same += 1
                 continue
 
@@ -380,24 +369,26 @@ class Learning:
                 reward, done = self.env.take_action(action.item())
                 reward = torch.tensor([reward], device=self.device)
 
-                # loss += self.optimize_model()
-
                 if step >= 100:
                     done = True
-                    # print('#{}  loop actions'.format(num))
+                    if print_each_result:
+                        print('#{}  loop actions'.format(num))
                     loop += 1 
 
             if 0 < step < 100:
                 step_average += step
                 ok += 1
-                # print('#{}  step:{}'.format(num, step))
+                if print_each_result:
+                    print('#{}  step:{}'.format(num, step))
 
         step_average /= ok
 
+        print('--------------------')
         print('step average:', step_average)
         print('sort success:', ok)
         print('loop error:', loop)
         print('same number error:', same)
+        print('--------------------')
 
         if path is None:
             with open(self.dirpath+'test.txt', 'a') as f:

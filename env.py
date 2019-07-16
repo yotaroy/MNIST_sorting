@@ -27,21 +27,14 @@ class Env:
         error_count = 0
         while self._is_sorted():    # 初期状態で揃っていた場合，並び替える
             error_count += 1
-            action = self.actions[random.randint(0, self.digit_num-2)]
-            self._exchange(action)
+            change_num = random.randint(1, self.digit_num*(self.digit_num-1)//2)    # 並び替える回数
+            for _ in range(change_num):
+                action = self.actions[random.randint(0, self.digit_num-2)]
+                self._exchange(action)
             if error_count > 1000:
                 print('REPDIGIT ERROR')
                 return True
         return False
-
-
-    '''
-    def _terminate(self):
-        reward = self.failure_reward
-        if self._is_sorted():
-            reward = self.success_reward
-        return reward
-    '''
 
     def _exchange(self, action):
         loc1, loc2 = action
