@@ -381,7 +381,7 @@ class Learning:
                 if print_each_result:
                     print('#{}  step:{}'.format(num, step))
 
-        step_average /= ok
+        step_average = step_average / ok if ok != 0 else 'None'
 
         print('--------------------')
         print('step average:', step_average)

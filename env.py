@@ -31,7 +31,7 @@ class Env:
             for _ in range(change_num):
                 action = self.actions[random.randint(0, self.digit_num-2)]
                 self._exchange(action)
-            if error_count > 1000:
+            if error_count > 10:
                 print('REPDIGIT ERROR')
                 return True
         return False
