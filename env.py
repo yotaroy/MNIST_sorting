@@ -59,15 +59,3 @@ class Env:
             done = True
 
         return reward, done
-
-    # お遊び
-    def mnist_print(self):      
-        for i in range(28):
-            for j in range(28*self.digit_num):
-                if torch.cat([self.digits[i] for i in self.state_order], dim=1)[i][j].item() > 0.5:
-                    print('1', end='')
-                else:
-                    print('0', end='')
-            print()
-
-
