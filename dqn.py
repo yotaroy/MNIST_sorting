@@ -195,15 +195,26 @@ class Learning:
         steps = []
         losses = []
 
+        test_checks = []    # x-label of test steps and test successes
+        test_steps = []
+        test_successes = []
+
         # 移動平均
         step_hisory = []
         step_average_num = 100
         step_average = [np.nan] * (step_average_num-1)
 
         total_episode = 0
-        self.test_model(episode=total_episode)
+
+        test_step_average, test_success_rate = self.test_model(episode=total_episode)
+        test_checks.append(total_episode)
+        test_steps.append(test_step_average)
+        test_successes.append(test_success_rate)
+
         for epo in range(EPOCH):
             for digits, labels in self.train_loader:
+                if len(digits) != self.digit_num:
+                    break
                 step = 0
                 loss = 0
                 digits = digits.to(self.device)
@@ -254,14 +265,19 @@ class Learning:
                 # target_network update
                 if total_episode % self.target_update == 0:
                     self.target_net.load_state_dict(self.policy_net.state_dict())
-                
+
+                    # test
+                    test_step_average, test_success_rate = self.test_model(episode=total_episode)
+                    test_checks.append(total_episode)
+                    test_steps.append(test_step_average)
+                    test_successes.append(test_success_rate)
+                    self.test_plot(test_checks, test_steps, test_successes, self.dirpath+'test.png')
+
+               
                 if total_episode % 100 == 0:
                     self.plot_step(steps, step_average, self.dirpath+'step.png')
                     self.plot_loss(losses, self.dirpath+'loss.png')
                 
-                if total_episode % 1000 == 0:
-                    self.test_model(episode=total_episode)
-
                 if total_episode % 10000 == 0:
                     self.save_model(total_episode, steps, step_average, 
                         losses, self.dirpath+'model{}.pth'.format(total_episode))
@@ -348,6 +364,8 @@ class Learning:
         step_average = 0
 
         for num, (digits, labels) in enumerate(self.test_loader):
+            if len(digits) != self.digit_num:
+                break
             step = 0
             digits = digits.to(self.device)
 
@@ -382,12 +400,14 @@ class Learning:
                     print('#{}  step:{}'.format(num, step))
 
         step_average = step_average / ok if ok != 0 else 'None'
+        success_rate = ok / (ok+loop)
 
         print('--------------------')
         print('step average:', step_average)
         print('sort success:', ok)
         print('loop error:', loop)
         print('same number error:', same)
+        print('success rate:', success_rate)
         print('--------------------')
 
         if path is None:
@@ -398,4 +418,25 @@ class Learning:
                 f.write('sort success:{}\n'.format(ok))
                 f.write('loop error:{}\n'.format(loop))
                 f.write('same number error:{}\n'.format(same))
+                f.write('success rate:{}\n'.format(success_rate))
 
+        return step_average, success_rate
+
+    def test_plot(self, x, steps, successes, path):
+        fig = plt.figure()
+        plt.subplots_adjust(hspace=0.6)
+        ax1 = fig.add_subplot(211)
+        ax2 = fig.add_subplot(212)
+    
+        ax1.plot(x, steps)
+        ax1.set_title('average steps')
+        ax1.set_xlabel('episode')
+        ax1.set_ylabel('step')
+
+        ax2.plot(x, successes)
+        ax2.set_title('success rate of sorting')
+        ax2.set_ylabel('success rate')
+        ax2.set_xlabel('episode')
+
+        plt.savefig(path)
+        plt.close()
