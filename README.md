@@ -55,15 +55,17 @@ $ python main.py
 
 ## Result examples
 ### 4個のMNIST画像が入力される時の学習結果
-テストデータでのソート成功率
+以下の結果は，上の実行例の通りに実行をしたときに得ることができる．  
+#### テストデータでのソート成功率
 ![result4](./result_examples/result_mnist_4_40000.png)
-テストデータでのソートが成功したなかでの行動数の平均
+#### テストデータでのソートが成功したなかでの行動数の平均
 ![result4s](./result_examples/step_result_mnist_4_40000.png)
-上図の結果は，上の実行例の通りに実行をしたときに得ることができる．  
+   
 
 ### 5個のMNIST画像が入力される時の学習結果
-テストデータでのソート成功率
+以下の結果は，[main.py](./main.py)の9行目をdigit=5に，15行目のreplay memoryのサイズrを5から6にして，上の実行例の通りに実行をしたときに得ることができる．
+#### テストデータでのソート成功率
 ![result5](./result_examples/result_mnist_5_10000.png)
-テストデータでのソートが成功したなかでの行動数の平均
+#### テストデータでのソートが成功したなかでの行動数の平均
 ![result5s](./result_examples/step_result_mnist_5_10000.png)
-上図の結果は，[main.py](./main.py)の9行目をdigit=5に，15行目のreplay memoryのサイズrを5から6にして，上の実行例の通りに実行をしたときに得ることができる．
+   
