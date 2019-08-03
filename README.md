@@ -1,6 +1,6 @@
 # MNIST sorting
 
-## task
+## Task
 n個の数字の画像が入力され，隣同士の数字を入れ替えるという行動をして，昇順にソートをする．これをDQNを用いて学習を行う．  
 MNISTの数字の画像n個が入力のstateとなり，出力をn-1つのactionとする．
 ```
@@ -21,7 +21,8 @@ n個の数字は，ランダムに選ばれ，n個の数字が同じである場
 パッケージなど
 [requirements.txt](./requirements.txt)  
 
-環境は[env.py](./env.py)に書かれている．ただし，pytorchのtensorを使った学習を想定している．
+ソートをするための環境は[env.py](./env.py)に書かれている．ただし，pytorchのtensorを使った学習を想定している．  
+DQNの学習については全て[dqn.py](./dqn.py)に書かれている．
 
 ## Usage
 ### 使用例
@@ -48,3 +49,21 @@ modeはmnistとdigitがある．mnistは入力がmnistの数字の画像であ�
 $ python main.py
 ```
 
+学習を実行するとディレクトリが作られ，そこにデータが保存される．  
+設定はsetting(mnist).txtまたはsetting(digit).txtに書かれる．  
+学習経過のデータ，ネットワークのパラメータ等のデータはmodel*.pthに保存される．*には保存されたときの学習の合計のエピソード数が記録される．  
+
+## Result examples
+### 4個のMNIST画像が入力される時の学習結果
+テストデータでのソート成功率
+![result4](./result_examples/result_mnist_4_40000.png)
+テストデータでのソートが成功したなかでの行動数の平均
+![result4s](./result_examples/step_result_mnist_4_40000.png)
+上図の結果は，上の実行例の通りに実行をしたときに得ることができる．  
+
+### 5個のMNIST画像が入力される時の学習結果
+テストデータでのソート成功率
+![result5](./result_examples/result_mnist_5_10000.png)
+テストデータでのソートが成功したなかでの行動数の平均
+![result5s](./result_examples/step_result_mnist_5_10000.png)
+上図の結果は，[main.py](./main.py)の9行目をdigit=5に，15行目のreplay memoryのサイズrを5から6にして，上の実行例の通りに実行をしたときに得ることができる．

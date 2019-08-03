@@ -9,6 +9,7 @@ if __name__ == "__main__":
     digit = 4   # いくつの数字をソートするか
     chosen_model = 'mnist'  # mnist or digit
     model_dict = {'digit':dqn.DQN_DIGIT(digit), 'mnist':dqn.DQN_MNIST(digit)}
+    print(chosen_model)
     print('nums of digit = ', digit)
 
     g, t, b, a, r = 0.7, 30, 128, 0.0, 5
@@ -17,4 +18,4 @@ if __name__ == "__main__":
     learning = dqn.Learning(device, model_dict[chosen_model], digit_num=digit, 
         learning_mode=chosen_model, gamma=g, target_update=t, 
         batch_size=b, action_cost=a, replay_memory_size=10**r)
-    learning.training(EPOCH=10)
+    learning.training(EPOCH=3)

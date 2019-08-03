@@ -278,9 +278,9 @@ class Learning:
                     self.plot_step(steps, step_average, self.dirpath+'step.png')
                     self.plot_loss(losses, self.dirpath+'loss.png')
                 
-                if total_episode % 10000 == 0:
+                if total_episode % 5000 == 0:
                     self.save_model(total_episode, steps, step_average, 
-                        losses, self.dirpath+'model{}.pth'.format(total_episode))
+                        losses, test_checks, test_steps, test_successes, self.dirpath+'model{}.pth'.format(total_episode))
                 
                 print('episode:{}, steps:{}'.format(total_episode, step))
 
@@ -311,7 +311,7 @@ class Learning:
         plt.close()
 
     # モデルの保存
-    def save_model(self, episode, steps, step_average, losses, path):
+    def save_model(self, episode, steps, step_average, losses, test_checks, test_steps, test_successes, path):
         checkpoint = {
             'episode': episode,
             'digit_num': self.digit_num,
@@ -327,7 +327,10 @@ class Learning:
             'action_cost': self.action_cost,
             'steps': steps,
             'step_average': step_average,
-            'losses': losses
+            'losses': losses,
+            'test_checks': test_checks,
+            'test_steps': test_steps,
+            'test_successes': test_successes
         }
         torch.save(checkpoint, path)
 
