@@ -18,8 +18,8 @@ n個の数字は，ランダムに選ばれ，n個の数字が同じである場
 割引率gamma < 1設定する．(gamma=1の代わりに，ソートが完了した時以外の即時報酬に負の値を設定するということも考えられる．)
 
 ## Requirement
-パッケージなど
-[requirements.txt](./requirements.txt)  
+condaの環境
+[env.yaml](./env.yaml)  
 
 ソートをするための環境は[env.py](./env.py)に書かれている．ただし，pytorchのtensorを使った学習を想定している．  
 DQNの学習については全て[dqn.py](./dqn.py)に書かれている．
